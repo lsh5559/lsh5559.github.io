@@ -1,0 +1,109 @@
+/* ─────────────────────────────────────────────
+   style.css · 공통 스타일
+   ───────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&family=Noto+Serif+KR:wght@300;400;600&family=Noto+Sans+KR:wght@300;400&display=swap');
+
+:root {
+  --bg:           #0c0c0c;
+  --fg:           #f0ede8;
+  --fg-muted:     #888880;
+  --border:       #f0ede8;
+  --btn-hover-bg: #f0ede8;
+  --btn-hover-fg: #0c0c0c;
+
+  --font-display: 'Cormorant Garamond', 'Noto Serif KR', serif;
+  --font-body:    'DM Sans', 'Noto Sans KR', sans-serif;
+
+  --ease:       cubic-bezier(0.4, 0, 0.2, 1);
+  --transition: 0.3s var(--ease);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; scroll-behavior: smooth; }
+
+body {
+  background: #1b1b1b;
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-weight: 300;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+
+/* ── 공통 버튼 ── */
+.nav-btn {
+  display: inline-block;
+  padding: 0.45rem 1.2rem;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.72rem;           /* 기존 0.8rem에서 약 5pt 축소 */
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+  white-space: nowrap;
+}
+
+.nav-btn:hover {
+  background: var(--btn-hover-bg);
+  color: var(--btn-hover-fg);
+  border-color: var(--btn-hover-bg);
+}
+
+/* ── 공통 페이지 헤더 ── */
+.page-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.6rem 2.8rem;
+  background: linear-gradient(to bottom, rgba(12,12,12,0.95) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.page-header > * { pointer-events: auto; }
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 300;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* ── 스크롤바 ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #1b1b1b; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+/* ─────────────────────────────────────────────
+   페이지 전환 애니메이션
+   ───────────────────────────────────────────── */
+
+/* 진입: 처음엔 투명 — transform 제거로 잘림 방지 */
+body.page-enter {
+  opacity: 0;
+}
+
+/* 진입 활성화: 부드럽게 나타남 (0.45 × 1.3 ≈ 0.585s) */
+body.page-enter-active {
+  opacity: 1;
+  transition: opacity 0.585s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 이탈: 부드럽게 사라짐 (0.35 × 1.3 ≈ 0.455s) */
+body.page-leave {
+  opacity: 0;
+  transition: opacity 0.455s cubic-bezier(0.4, 0, 0.2, 1);
+}
