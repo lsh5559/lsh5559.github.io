@@ -147,6 +147,14 @@ function initDust() {
   resize();
   window.addEventListener('resize', resize);
 
+  /* 마우스 추적용 (dust 캔버스 좌표계) */
+  const dustMouse = { cx: canvas.width / 2, cy: canvas.height / 2,
+                      tx: canvas.width / 2, ty: canvas.height / 2 };
+  window.addEventListener('mousemove', e => {
+    dustMouse.tx = e.clientX;
+    dustMouse.ty = e.clientY;
+  });
+
   function createParticle() {
     const maxLife = Math.random() * 420 + 280;
     return {
@@ -165,14 +173,31 @@ function initDust() {
 
   for (let i = 0; i < COUNT; i++) particles.push(createParticle());
 
+  const DUST_LERP = 0.04;
+
   let t = 0;
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     t++;
+
+    /* 마우스 위치 부드럽게 추적 */
+    dustMouse.cx += (dustMouse.tx - dustMouse.cx) * DUST_LERP;
+    dustMouse.cy += (dustMouse.ty - dustMouse.cy) * DUST_LERP;
+
+    /* 화면 중앙 기준 마우스 오프셋 (-1 ~ 1) */
+    const mx = (dustMouse.cx / window.innerWidth  - 0.5) * 2;
+    const my = (dustMouse.cy / window.innerHeight - 0.5) * 2;
+
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
+        /* 마우스 근처 파티클만 밀림 — 거리 기반 영향력 */
+      const dx   = p.x - dustMouse.cx;
+      const dy   = p.y - dustMouse.cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const RADIUS = 160;   /* 영향 반경(px) */
+      const influence = Math.max(0, 1 - dist / RADIUS);
+      p.x += p.vx + mx * 0.55 * influence;
+      p.y += p.vy + my * 0.55 * influence;
       p.life++;
 
       if (p.life >= p.maxLife || p.y > canvas.height + 8) {
@@ -191,13 +216,26 @@ function initDust() {
       const alpha   = p.peakOpacity * lifeFactor * (0.6 + 0.4 * twinkle);
       if (alpha <= 0.005) continue;
 
-      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 1.8);
-      grad.addColorStop(0,   `rgba(255,255,255,${alpha})`);
-      grad.addColorStop(0.5, `rgba(255,255,255,${alpha * 0.4})`);
-      grad.addColorStop(1,   `rgba(255,255,255,0)`);
+      /* 외곽 소프트 글로우 (블러 효과) */
+      const blurR = p.size * 7;
+      const glow  = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, blurR);
+      glow.addColorStop(0,    `rgba(255,255,255,${alpha * 0.35})`);
+      glow.addColorStop(0.4,  `rgba(255,255,255,${alpha * 0.12})`);
+      glow.addColorStop(1,    `rgba(255,255,255,0)`);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * 1.8, 0, Math.PI * 2);
-      ctx.fillStyle = grad;
+      ctx.arc(p.x, p.y, blurR, 0, Math.PI * 2);
+      ctx.fillStyle = glow;
+      ctx.fill();
+
+      /* 중심 밝은 코어 */
+      const coreR = p.size * 1.8;
+      const core  = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, coreR);
+      core.addColorStop(0,   `rgba(255,255,255,${alpha})`);
+      core.addColorStop(0.5, `rgba(255,255,255,${alpha * 0.5})`);
+      core.addColorStop(1,   `rgba(255,255,255,0)`);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, coreR, 0, Math.PI * 2);
+      ctx.fillStyle = core;
       ctx.fill();
     }
     requestAnimationFrame(draw);
