@@ -245,7 +245,7 @@ ${worksCSS}
 <body class="works-body">
   <header class="admin-toolbar">
     <div class="admin-toolbar-left">
-      <a href="index.html" class="nav-btn">← Back</a>
+      <a href="main.html" class="nav-btn">← Back</a>
       <span class="page-title-works">Works</span>
     </div>
   </header>
