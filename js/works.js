@@ -1,13 +1,13 @@
 /* ─────────────────────────────────────────────
    works.js · 게시판 CRUD + 코드 출력 + 코드 불러오기
-   IndexedDB 기반 (localStorage 용량 한계 해결)
+   GitHub Pages 대응: IndexedDB + 이미지 URL 입력 방식
    ───────────────────────────────────────────── */
 
 const DB_NAME    = 'portfolio_db';
 const DB_VERSION = 1;
 const STORE_NAME = 'works';
 
-/* ── IndexedDB 초기화 ── */
+/* ── IndexedDB ── */
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -24,9 +24,8 @@ function openDB() {
 
 function getPosts() {
   return openDB().then(db => new Promise((resolve, reject) => {
-    const tx    = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const req   = store.getAll();
+    const tx  = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).getAll();
     req.onsuccess = () => resolve(req.result || []);
     req.onerror   = e => reject(e.target.error);
   }));
@@ -34,9 +33,8 @@ function getPosts() {
 
 function savePost(post) {
   return openDB().then(db => new Promise((resolve, reject) => {
-    const tx    = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const req   = store.put(post);
+    const tx  = db.transaction(STORE_NAME, 'readwrite');
+    const req = tx.objectStore(STORE_NAME).put(post);
     req.onsuccess = () => resolve();
     req.onerror   = e => reject(e.target.error);
   }));
@@ -44,9 +42,8 @@ function savePost(post) {
 
 function deletePostFromDB(id) {
   return openDB().then(db => new Promise((resolve, reject) => {
-    const tx    = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const req   = store.delete(id);
+    const tx  = db.transaction(STORE_NAME, 'readwrite');
+    const req = tx.objectStore(STORE_NAME).delete(id);
     req.onsuccess = () => resolve();
     req.onerror   = e => reject(e.target.error);
   }));
@@ -54,9 +51,8 @@ function deletePostFromDB(id) {
 
 function clearDB() {
   return openDB().then(db => new Promise((resolve, reject) => {
-    const tx    = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const req   = store.clear();
+    const tx  = db.transaction(STORE_NAME, 'readwrite');
+    const req = tx.objectStore(STORE_NAME).clear();
     req.onsuccess = () => resolve();
     req.onerror   = e => reject(e.target.error);
   }));
@@ -77,9 +73,7 @@ function unesc(str) {
 /* ── 렌더링 ── */
 function renderPosts() {
   getPosts().then(posts => {
-    /* IndexedDB는 삽입 순서 보장이 안 되므로 id 기준 정렬 */
     posts.sort((a, b) => (a.id < b.id ? -1 : 1));
-
     const list = document.getElementById('works-list');
 
     if (posts.length === 0) {
@@ -91,7 +85,7 @@ function renderPosts() {
       <article class="post-card" data-id="${post.id}">
         <div class="post-image-wrap">
           ${post.image
-            ? `<img src="${post.image}" alt="${esc(post.title)}">`
+            ? `<img src="${esc(post.image)}" alt="${esc(post.title)}">`
             : `<div style="width:100%;height:100%;background:#1a1a1a;display:flex;align-items:center;justify-content:center;color:#333;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;">이미지 없음</div>`}
         </div>
         <div class="post-info">
@@ -121,7 +115,7 @@ const modalOverlay = document.getElementById('modal-overlay');
 const modalTitle   = document.getElementById('modal-title');
 const formTitle    = document.getElementById('form-title');
 const formDesc     = document.getElementById('form-desc');
-const formFile     = document.getElementById('form-file');
+const formImageUrl = document.getElementById('form-image-url');
 const imgPreview   = document.getElementById('img-preview');
 
 let editingId    = null;
@@ -129,24 +123,26 @@ let currentImage = null;
 
 function openModal(id = null) {
   editingId = id; currentImage = null;
+
   if (id) {
     getPosts().then(posts => {
       const post = posts.find(p => p.id === id);
       if (!post) return;
       modalTitle.textContent = '작업물 편집';
-      formTitle.value = post.title;
-      formDesc.value  = post.description;
-      currentImage    = post.image || null;
+      formTitle.value        = post.title;
+      formDesc.value         = post.description;
+      formImageUrl.value     = post.image || '';
+      currentImage           = post.image || null;
       if (currentImage) { imgPreview.src = currentImage; imgPreview.classList.add('visible'); }
       else { imgPreview.classList.remove('visible'); }
-      formFile.value = '';
       modalOverlay.classList.add('active');
     });
   } else {
     modalTitle.textContent = '새 작업물 추가';
-    formTitle.value = ''; formDesc.value = '';
+    formTitle.value        = '';
+    formDesc.value         = '';
+    formImageUrl.value     = '';
     imgPreview.classList.remove('visible');
-    formFile.value = '';
     modalOverlay.classList.add('active');
   }
 }
@@ -156,21 +152,24 @@ function closeModal() {
   editingId = null; currentImage = null;
 }
 
-formFile.addEventListener('change', () => {
-  const file = formFile.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    currentImage = e.target.result;
-    imgPreview.src = currentImage;
+/* URL 입력 시 미리보기 */
+formImageUrl.addEventListener('input', () => {
+  const url = formImageUrl.value.trim();
+  if (url) {
+    imgPreview.src = url;
     imgPreview.classList.add('visible');
-  };
-  reader.readAsDataURL(file);
+    currentImage = url;
+  } else {
+    imgPreview.classList.remove('visible');
+    currentImage = null;
+  }
 });
 
 document.getElementById('btn-save').addEventListener('click', () => {
   const title = formTitle.value.trim();
   const desc  = formDesc.value.trim();
+  const image = formImageUrl.value.trim();
+
   if (!title) { alert('제목을 입력해 주세요.'); formTitle.focus(); return; }
 
   getPosts().then(posts => {
@@ -178,14 +177,9 @@ document.getElementById('btn-save').addEventListener('click', () => {
     if (editingId) {
       const existing = posts.find(p => p.id === editingId);
       if (!existing) return;
-      postToSave = {
-        ...existing,
-        title,
-        description: desc,
-        image: currentImage !== null ? currentImage : existing.image,
-      };
+      postToSave = { ...existing, title, description: desc, image: image || existing.image };
     } else {
-      postToSave = { id: generateId(), title, description: desc, image: currentImage || '' };
+      postToSave = { id: generateId(), title, description: desc, image: image || '' };
     }
     savePost(postToSave).then(() => { renderPosts(); closeModal(); });
   });
@@ -244,19 +238,12 @@ document.getElementById('import-file-input').addEventListener('change', function
         }
 
         const finalList = mode === 'merge' ? [...existing, ...imported] : imported;
-
-        const saveAll = () => Promise.all(finalList.map(savePost));
+        const saveAll   = () => Promise.all(finalList.map(savePost));
 
         if (mode === 'replace') {
-          clearDB().then(saveAll).then(() => {
-            renderPosts();
-            alert(`작업물 ${imported.length}개를 불러왔습니다.`);
-          });
+          clearDB().then(saveAll).then(() => { renderPosts(); alert(`작업물 ${imported.length}개를 불러왔습니다.`); });
         } else {
-          saveAll().then(() => {
-            renderPosts();
-            alert(`작업물 ${imported.length}개를 불러왔습니다.`);
-          });
+          saveAll().then(() => { renderPosts(); alert(`작업물 ${imported.length}개를 불러왔습니다.`); });
         }
       });
     } catch (err) {
@@ -291,7 +278,7 @@ async function exportCode() {
       <article class="post-card">
         <div class="post-image-wrap">
           ${post.image
-            ? `<img src="${post.image}" alt="${esc(post.title)}">`
+            ? `<img src="${esc(post.image)}" alt="${esc(post.title)}">`
             : `<div style="width:100%;height:100%;background:#1a1a1a;display:flex;align-items:center;justify-content:center;color:#333;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;">No Image</div>`}
         </div>
         <div class="post-info">
