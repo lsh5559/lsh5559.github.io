@@ -220,3 +220,22 @@
   .admin-toolbar { padding: 1.2rem 1.4rem; flex-wrap: wrap; gap: 0.8rem; }
   .works-list { padding-left: 1.4rem; padding-right: 1.4rem; padding-top: 6rem; }
 }
+
+/* ── 공통 버튼 ── */
+.btn {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.45rem 1.1rem;
+  border: 1px solid rgba(240,237,232,0.35);
+  background: transparent;
+  color: rgba(240,237,232,0.6);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+.btn:hover {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
