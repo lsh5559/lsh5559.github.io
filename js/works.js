@@ -1,14 +1,67 @@
 /* ─────────────────────────────────────────────
    works.js · 게시판 CRUD + 코드 출력 + 코드 불러오기
+   IndexedDB 기반 (localStorage 용량 한계 해결)
    ───────────────────────────────────────────── */
 
-const STORAGE_KEY = 'portfolio_works';
+const DB_NAME    = 'portfolio_db';
+const DB_VERSION = 1;
+const STORE_NAME = 'works';
+
+/* ── IndexedDB 초기화 ── */
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = e => reject(e.target.error);
+  });
+}
 
 function getPosts() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-  catch { return []; }
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx    = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req   = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror   = e => reject(e.target.error);
+  }));
 }
-function savePosts(posts) { localStorage.setItem(STORAGE_KEY, JSON.stringify(posts)); }
+
+function savePost(post) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx    = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const req   = store.put(post);
+    req.onsuccess = () => resolve();
+    req.onerror   = e => reject(e.target.error);
+  }));
+}
+
+function deletePostFromDB(id) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx    = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const req   = store.delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror   = e => reject(e.target.error);
+  }));
+}
+
+function clearDB() {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx    = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const req   = store.clear();
+    req.onsuccess = () => resolve();
+    req.onerror   = e => reject(e.target.error);
+  }));
+}
+
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function esc(str) {
   return String(str)
@@ -23,41 +76,44 @@ function unesc(str) {
 
 /* ── 렌더링 ── */
 function renderPosts() {
-  const list  = document.getElementById('works-list');
-  const posts = getPosts();
+  getPosts().then(posts => {
+    /* IndexedDB는 삽입 순서 보장이 안 되므로 id 기준 정렬 */
+    posts.sort((a, b) => (a.id < b.id ? -1 : 1));
 
-  if (posts.length === 0) {
-    list.innerHTML = `<div class="works-empty">아직 작업물이 없습니다</div>`;
-    return;
-  }
+    const list = document.getElementById('works-list');
 
-  list.innerHTML = posts.map((post, idx) => `
-    <article class="post-card" data-id="${post.id}">
-      <div class="post-image-wrap">
-        ${post.image
-          ? `<img src="${post.image}" alt="${esc(post.title)}">`
-          : `<div style="width:100%;height:100%;background:#1a1a1a;display:flex;align-items:center;justify-content:center;color:#333;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;">이미지 없음</div>`}
-      </div>
-      <div class="post-info">
-        <span class="post-number">0${idx + 1}</span>
-        <h2 class="post-title">${esc(post.title)}</h2>
-        <p class="post-desc">${esc(post.description)}</p>
-        <div class="post-actions">
-          <button class="btn-post-edit"   data-id="${post.id}">편집</button>
-          <button class="btn-post-delete" data-id="${post.id}">삭제</button>
+    if (posts.length === 0) {
+      list.innerHTML = `<div class="works-empty">아직 작업물이 없습니다</div>`;
+      return;
+    }
+
+    list.innerHTML = posts.map((post, idx) => `
+      <article class="post-card" data-id="${post.id}">
+        <div class="post-image-wrap">
+          ${post.image
+            ? `<img src="${post.image}" alt="${esc(post.title)}">`
+            : `<div style="width:100%;height:100%;background:#1a1a1a;display:flex;align-items:center;justify-content:center;color:#333;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;">이미지 없음</div>`}
         </div>
-      </div>
-    </article>
-  `).join('');
+        <div class="post-info">
+          <span class="post-number">0${idx + 1}</span>
+          <h2 class="post-title">${esc(post.title)}</h2>
+          <p class="post-desc">${esc(post.description)}</p>
+          <div class="post-actions">
+            <button class="btn-post-edit"   data-id="${post.id}">편집</button>
+            <button class="btn-post-delete" data-id="${post.id}">삭제</button>
+          </div>
+        </div>
+      </article>
+    `).join('');
 
-  list.querySelectorAll('.btn-post-edit')  .forEach(b => b.addEventListener('click', () => openModal(b.dataset.id)));
-  list.querySelectorAll('.btn-post-delete').forEach(b => b.addEventListener('click', () => deletePost(b.dataset.id)));
+    list.querySelectorAll('.btn-post-edit')  .forEach(b => b.addEventListener('click', () => openModal(b.dataset.id)));
+    list.querySelectorAll('.btn-post-delete').forEach(b => b.addEventListener('click', () => deletePost(b.dataset.id)));
+  });
 }
 
 function deletePost(id) {
   if (!confirm('이 작업물을 삭제하시겠습니까?')) return;
-  savePosts(getPosts().filter(p => p.id !== id));
-  renderPosts();
+  deletePostFromDB(id).then(renderPosts);
 }
 
 /* ── 모달 ── */
@@ -74,21 +130,25 @@ let currentImage = null;
 function openModal(id = null) {
   editingId = id; currentImage = null;
   if (id) {
-    const post = getPosts().find(p => p.id === id);
-    if (!post) return;
-    modalTitle.textContent = '작업물 편집';
-    formTitle.value = post.title;
-    formDesc.value  = post.description;
-    currentImage    = post.image || null;
-    if (currentImage) { imgPreview.src = currentImage; imgPreview.classList.add('visible'); }
-    else { imgPreview.classList.remove('visible'); }
+    getPosts().then(posts => {
+      const post = posts.find(p => p.id === id);
+      if (!post) return;
+      modalTitle.textContent = '작업물 편집';
+      formTitle.value = post.title;
+      formDesc.value  = post.description;
+      currentImage    = post.image || null;
+      if (currentImage) { imgPreview.src = currentImage; imgPreview.classList.add('visible'); }
+      else { imgPreview.classList.remove('visible'); }
+      formFile.value = '';
+      modalOverlay.classList.add('active');
+    });
   } else {
     modalTitle.textContent = '새 작업물 추가';
     formTitle.value = ''; formDesc.value = '';
     imgPreview.classList.remove('visible');
+    formFile.value = '';
+    modalOverlay.classList.add('active');
   }
-  formFile.value = '';
-  modalOverlay.classList.add('active');
 }
 
 function closeModal() {
@@ -113,18 +173,22 @@ document.getElementById('btn-save').addEventListener('click', () => {
   const desc  = formDesc.value.trim();
   if (!title) { alert('제목을 입력해 주세요.'); formTitle.focus(); return; }
 
-  const posts = getPosts();
-  if (editingId) {
-    const idx = posts.findIndex(p => p.id === editingId);
-    if (idx !== -1) {
-      posts[idx].title       = title;
-      posts[idx].description = desc;
-      if (currentImage) posts[idx].image = currentImage;
+  getPosts().then(posts => {
+    let postToSave;
+    if (editingId) {
+      const existing = posts.find(p => p.id === editingId);
+      if (!existing) return;
+      postToSave = {
+        ...existing,
+        title,
+        description: desc,
+        image: currentImage !== null ? currentImage : existing.image,
+      };
+    } else {
+      postToSave = { id: generateId(), title, description: desc, image: currentImage || '' };
     }
-  } else {
-    posts.push({ id: generateId(), title, description: desc, image: currentImage || '' });
-  }
-  savePosts(posts); renderPosts(); closeModal();
+    savePost(postToSave).then(() => { renderPosts(); closeModal(); });
+  });
 });
 
 document.getElementById('btn-cancel').addEventListener('click', closeModal);
@@ -134,7 +198,6 @@ document.getElementById('btn-add').addEventListener('click', () => openModal());
 
 /* ═══════════════════════════════════════════════
    코드 불러오기 (Import)
-   내보낸 works_export.html 을 파싱해서 posts 복원
    ═══════════════════════════════════════════════ */
 document.getElementById('btn-import').addEventListener('click', () => {
   document.getElementById('import-file-input').click();
@@ -147,12 +210,12 @@ document.getElementById('import-file-input').addEventListener('change', function
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const parser   = new DOMParser();
-      const doc      = parser.parseFromString(e.target.result, 'text/html');
-      const cards    = doc.querySelectorAll('.post-card');
+      const parser = new DOMParser();
+      const doc    = parser.parseFromString(e.target.result, 'text/html');
+      const cards  = doc.querySelectorAll('.post-card');
 
       if (cards.length === 0) {
-        alert('불러올 작업물을 찾지 못했습니다.\n코드 출력로 생성된 works_export.html 파일을 선택해 주세요.');
+        alert('불러올 작업물을 찾지 못했습니다.\n코드 출력으로 생성된 works_export.html 파일을 선택해 주세요.');
         return;
       }
 
@@ -161,7 +224,6 @@ document.getElementById('import-file-input').addEventListener('change', function
         const titleEl = card.querySelector('.post-title');
         const descEl  = card.querySelector('.post-desc');
         const imgEl   = card.querySelector('img');
-
         imported.push({
           id:          generateId(),
           title:       titleEl ? unesc(titleEl.textContent.trim()) : '',
@@ -170,30 +232,40 @@ document.getElementById('import-file-input').addEventListener('change', function
         });
       });
 
-      /* 기존 데이터와 병합할지 덮어쓸지 선택 */
-      const existing = getPosts();
-      let mode = 'replace';
-      if (existing.length > 0) {
-        const choice = confirm(
-          `현재 작업물 ${existing.length}개가 있습니다.\n\n` +
-          `[확인] 기존 데이터를 유지하고 가져온 항목 추가\n` +
-          `[취소] 기존 데이터를 모두 지우고 가져온 항목으로 교체`
-        );
-        mode = choice ? 'merge' : 'replace';
-      }
+      getPosts().then(existing => {
+        let mode = 'replace';
+        if (existing.length > 0) {
+          const choice = confirm(
+            `현재 작업물 ${existing.length}개가 있습니다.\n\n` +
+            `[확인] 기존 데이터를 유지하고 가져온 항목 추가\n` +
+            `[취소] 기존 데이터를 모두 지우고 가져온 항목으로 교체`
+          );
+          mode = choice ? 'merge' : 'replace';
+        }
 
-      const final = mode === 'merge' ? [...existing, ...imported] : imported;
-      savePosts(final);
-      renderPosts();
+        const finalList = mode === 'merge' ? [...existing, ...imported] : imported;
 
-      alert(`작업물 ${imported.length}개를 불러왔습니다.`);
+        const saveAll = () => Promise.all(finalList.map(savePost));
+
+        if (mode === 'replace') {
+          clearDB().then(saveAll).then(() => {
+            renderPosts();
+            alert(`작업물 ${imported.length}개를 불러왔습니다.`);
+          });
+        } else {
+          saveAll().then(() => {
+            renderPosts();
+            alert(`작업물 ${imported.length}개를 불러왔습니다.`);
+          });
+        }
+      });
     } catch (err) {
       console.error('Import 오류:', err);
       alert('파일을 읽는 중 오류가 발생했습니다.');
     }
   };
   reader.readAsText(file);
-  this.value = ''; /* 같은 파일 재선택 가능하도록 초기화 */
+  this.value = '';
 });
 
 
@@ -203,7 +275,9 @@ document.getElementById('import-file-input').addEventListener('change', function
 document.getElementById('btn-export').addEventListener('click', exportCode);
 
 async function exportCode() {
-  const posts = getPosts();
+  const posts = await getPosts();
+  posts.sort((a, b) => (a.id < b.id ? -1 : 1));
+
   let styleCSS = '', worksCSS = '';
   try {
     [styleCSS, worksCSS] = await Promise.all([
@@ -234,8 +308,8 @@ async function exportCode() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Works</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&family=Noto+Serif+KR:wght@300;400;600&family=Noto+Sans+KR:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="[fonts.googleapis.com](https://fonts.googleapis.com)">
+  <link href="[fonts.googleapis.com](https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&family=Noto+Serif+KR:wght@300;400;600&family=Noto+Sans+KR:wght@300;400&display=swap)" rel="stylesheet">
   <style>
 ${styleCSS}
 ${worksCSS}
